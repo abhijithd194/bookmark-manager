@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { deleteBookmark } from "@/app/actions";
-import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 interface Bookmark {
     id: number;
@@ -26,51 +25,10 @@ export default function BookmarkList({
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
     useEffect(() => {
-        const supabase = createClient();
+        setBookmarks(initialBookmarks);
+    }, [initialBookmarks]); 
 
-        const channel = supabase
-            .channel("bookmarks-realtime")
-            .on(
-                "postgres_changes",
-                {
-                    event: "INSERT",
-                    schema: "public",
-                    table: "bookmarks",
-                    filter: `user_id=eq.${userId}`,
-                },
-                (payload: RealtimePostgresChangesPayload<Bookmark>) => {
-                    if (payload.eventType === "INSERT") {
-                        const newBookmark = payload.new as Bookmark;
-                        setBookmarks((prev) => {
-                            // Avoid duplicates
-                            if (prev.some((b) => b.id === newBookmark.id)) return prev;
-                            return [newBookmark, ...prev];
-                        });
-                    }
-                }
-            )
-            .on(
-                "postgres_changes",
-                {
-                    event: "DELETE",
-                    schema: "public",
-                    table: "bookmarks",
-                    filter: `user_id=eq.${userId}`,
-                },
-                (payload: RealtimePostgresChangesPayload<Bookmark>) => {
-                    if (payload.eventType === "DELETE") {
-                        const oldBookmark = payload.old as Partial<Bookmark>;
-                        setBookmarks((prev) => prev.filter((b) => b.id !== oldBookmark.id));
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [userId]);
-
+    
     const handleDelete = async (id: number) => {
         setDeletingId(id);
         await deleteBookmark(id);
@@ -131,14 +89,12 @@ export default function BookmarkList({
                     </div>
                     <div className="flex items-center gap-3">
                         <time className="text-xs text-zinc-600 hidden sm:block whitespace-nowrap">
-                            {new Date(bookmark.created_at).toLocaleDateString()}
+                            {new Date(bookmark.created_at).toLocaleDateString("en-US")}
                         </time>
                         <button
                             onClick={() => handleDelete(bookmark.id)}
                             disabled={deletingId === bookmark.id}
-                            className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-400/10 
-                         opacity-0 group-hover:opacity-100 
-                         transition-all duration-200 disabled:opacity-50 cursor-pointer"
+                            className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all duration-200 disabled:opacity-50 cursor-pointer"
                             title="Delete bookmark"
                         >
                             {deletingId === bookmark.id ? (
@@ -180,3 +136,4 @@ export default function BookmarkList({
         </div>
     );
 }
+
