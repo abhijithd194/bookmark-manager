@@ -27,7 +27,7 @@ export async function addBookmark(formData: FormData) {
     if (error) {
         return { error: error.message };
     }
-
+    revalidatePath("/");
     return { success: true };
 }
 
@@ -46,7 +46,7 @@ export async function deleteBookmark(id: number) {
     if (error) {
         return { error: error.message };
     }
-
+    revalidatePath("/");
     return { success: true };
 }
 
