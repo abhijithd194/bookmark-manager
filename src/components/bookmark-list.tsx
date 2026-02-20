@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { deleteBookmark } from "@/app/actions";
-
 interface Bookmark {
-    id: number;
+    id: string;
     title: string;
     url: string;
     user_id: string;
@@ -22,14 +21,51 @@ export default function BookmarkList({
     userId,
 }: BookmarkListProps) {
     const [bookmarks, setBookmarks] = useState<Bookmark[]>(initialBookmarks);
-    const [deletingId, setDeletingId] = useState<number | null>(null);
-
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     useEffect(() => {
-        setBookmarks(initialBookmarks);
-    }, [initialBookmarks]); 
-
-    
-    const handleDelete = async (id: number) => {
+        console.log("initialBookmarks", initialBookmarks);
+    }, [])
+    useEffect(() => {
+        const supabase = createClient();
+        const channel = supabase
+            .channel("bookmarks-realtime")
+            .on(
+                "postgres_changes",
+                {
+                    event: "INSERT",
+                    schema: "public",
+                    table: "bookmarks",
+                },
+                (payload) => {
+                    console.log("INSERT", payload);
+                    const inserted = payload.new as Bookmark;
+                    if (inserted.user_id !== userId) return;
+                    setBookmarks((prev) => [inserted, ...prev]);
+                }
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "DELETE",
+                    schema: "public",
+                    table: "bookmarks",
+                },
+                (payload) => {
+                    console.log("DELETE", payload);
+                    const deleted = payload.old as Bookmark;
+                    setBookmarks((prev) =>
+                        prev.filter((b) => b.id !== deleted.id)
+                    );
+                }
+            )
+            .subscribe((status, err) => {
+                console.log("Realtime subscription status:", status, err ?? "");
+            });
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [userId]);
+    const handleDelete = async (id: string) => {
         setDeletingId(id);
         await deleteBookmark(id);
         // Realtime subscription will also remove it, but let's optimistically update
